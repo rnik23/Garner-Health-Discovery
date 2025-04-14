@@ -1,0 +1,91 @@
+import hl7
+
+# Example HL7 message (version 2.3) as a multi-line string.
+# In a real-world scenario, this message might be read from a network socket, a file, or an HL7 interface engine.
+raw_hl7_message = (
+    "MSH|^~\\&|GARNER_HEALTH|RIVER_HOSPITAL|LAB|GARNER_HEALTH|202504131230||ORU^R01|MSGID12345|P|2.3\r"
+    "PID|1||123456^^^RIVER_HOSPITAL^MR||Doe^John||19800101|M||Caucasian|123 Some St^^City^State^Zip||1234567890\r"
+    "OBR|1|ORD123|LAB123|Glucose^Blood Glucose|||202504131200||||202504131210\r"
+    "OBX|1|NM|GLU^Glucose^L||85|mg/dL|70-110|N|||F\r"
+)
+
+# ---------------------------
+# Extraction Phase Step 1: Parse the HL7 Message
+# ---------------------------
+# The 'hl7' package splits the raw HL7 message into segments using the carriage return delimiter.
+message = hl7.parse(raw_hl7_message)
+
+# ---------------------------
+# Extraction Phase Step 2: Identify and Extract Key Segments
+# ---------------------------
+# HL7 messages have segments identified by a three-letter code (e.g., MSH, PID, OBR, OBX).
+# We iterate through the message to find and extract data from these segments.
+
+# Initialize a dictionary to store extracted data
+extracted_data = {}
+
+# Extracting from the MSH segment (Message Header)
+for segment in message:
+    if segment[0] == 'MSH':
+        # MSH segment provides metadata about the message.
+        # Example: Source application, message date and time, etc.
+        extracted_data['SendingApplication'] = segment[2]
+        extracted_data['SendingFacility'] = segment[3]
+        extracted_data['ReceivingApplication'] = segment[4]
+        extracted_data['MessageDateTime'] = segment[6]
+        extracted_data['MessageType'] = segment[8][0]  # The message type might include a trigger event.
+    elif segment[0] == 'PID':
+        # PID segment includes patient demographic information.
+        # Example: Patient identifier, name, birth date, gender, etc.
+        extracted_data['PatientID'] = segment[3]
+        # Patient Name can contain multiple components (Last^First^Middle, etc.). We simplify it:
+        name_components = segment[5]
+        extracted_data['PatientName'] = f"{name_components[0]} {name_components[1]}" if len(name_components) >= 2 else name_components[0]
+        extracted_data['PatientDOB'] = segment[7]
+        extracted_data['PatientGender'] = segment[8]
+        extracted_data['PatientAddress'] = segment[11]
+    elif segment[0] == 'OBR':
+        # OBR segment includes information about the diagnostic order
+        extracted_data['OrderID'] = segment[2]
+        extracted_data['TestOrdered'] = segment[4][0]  # For example, "Glucose"
+        extracted_data['OrderDateTime'] = segment[7]
+    elif segment[0] == 'OBX':
+        # OBX segment includes the observations/results of the test.
+        extracted_data['ObservationID'] = segment[3]
+        extracted_data['ObservationValue'] = segment[5]
+        extracted_data['Units'] = segment[6]
+        extracted_data['ReferenceRange'] = segment[7]
+        extracted_data['AbnormalFlag'] = segment[8]
+        # Break after OBX if only interested in the first observation for this example.
+        break
+
+# ---------------------------
+# Extraction Phase Step 3: Output or Process the Extracted Data
+# ---------------------------
+# In a production system, this data could be fed into further transformation steps,
+# stored in a database, or passed to downstream healthcare applications.
+print("Extracted HL7 Data:")
+for key, value in extracted_data.items():
+    print(f"{key}: {value}")
+
+"""
+Explanation:
+
+1. **Parsing the Message**:  
+   The HL7 message is parsed using `hl7.parse()`, which returns a list of segments. Each segment is represented as a list where the first element is the segment type (MSH, PID, etc.).
+
+2. **Extracting Data from Segments**:  
+   - **MSH (Message Header)**:  
+     Extracts metadata such as the sending application, facility, and message date/time.  
+   - **PID (Patient Identification)**:  
+     Extracts patient details like ID, name (split into components), date of birth, gender, and address.  
+   - **OBR (Observation Request)**:  
+     Captures the order details, including the test ordered and the order time.  
+   - **OBX (Observation Result)**:  
+     Retrieves the observation details such as test result, units, reference range, and abnormal flags.
+
+3. **Processing Extracted Data**:  
+   Once extracted, the data is printed. In an actual interface implementation, this data would be further transformed and loaded into a clinical data repository or passed to another system component.
+
+This modular design of the extraction phase allows Garner Health to easily adapt the code to different HL7 messages or additional segments as needed.
+"""
