@@ -1,0 +1,77 @@
+import requests
+import json
+
+# Configuration: URL for the FHIR server and the specific endpoint/resource.
+# In a real implementation, these should be configurable.
+FHIR_BASE_URL = "https://fhir.example.com"  # Replace with your FHIR server base URL.
+PATIENT_ID = "example-patient-id"
+FHIR_PATIENT_ENDPOINT = f"{FHIR_BASE_URL}/Patient/{PATIENT_ID}"
+
+# Optional: Headers required by the FHIR server, such as authentication and content type.
+headers = {
+    "Accept": "application/fhir+json",
+    # "Authorization": "Bearer YOUR_ACCESS_TOKEN",  # Uncomment if authentication is required.
+}
+
+def fetch_patient_data():
+    """
+    Fetch a Patient resource from the FHIR server via the RESTful API.
+    """
+    try:
+        # Extraction Phase: Send the GET request to the FHIR API.
+        response = requests.get(FHIR_PATIENT_ENDPOINT, headers=headers)
+        response.raise_for_status()  # Raise an error if a non-200 status code is returned.
+
+        # The FHIR server responds with a JSON payload.
+        fhir_data = response.json()
+
+        return fhir_data
+    except requests.exceptions.RequestException as e:
+        print("Error retrieving data from FHIR server:", e)
+        return None
+
+def parse_patient_data(fhir_data):
+    """
+    Parse key patient data from the FHIR Patient resource JSON payload.
+    """
+    extracted_data = {}
+    
+    # FHIR Patient resources follow the FHIR JSON schema.
+    # Extracting basic identifiers, name, gender, and birthdate.
+    extracted_data['id'] = fhir_data.get('id', 'Unknown')
+    extracted_data['resourceType'] = fhir_data.get('resourceType', 'Unknown')
+    
+    # The 'name' field is an array. Here we extract the first name entry.
+    names = fhir_data.get('name', [])
+    if names:
+        first_name_entry = names[0]
+        family = first_name_entry.get('family', '')
+        given = " ".join(first_name_entry.get('given', []))
+        extracted_data['PatientName'] = f"{given} {family}".strip()
+    else:
+        extracted_data['PatientName'] = "Not Provided"
+    
+    extracted_data['gender'] = fhir_data.get('gender', 'Not Provided')
+    extracted_data['birthDate'] = fhir_data.get('birthDate', 'Not Provided')
+    
+    # You can extend the extraction to other FHIR fields as needed.
+    return extracted_data
+
+def main():
+    # Step 1: Extraction - Fetch data from the FHIR server.
+    fhir_data = fetch_patient_data()
+    
+    if fhir_data is None:
+        print("No data returned from the FHIR server.")
+        return
+
+    # Step 2: Parsing - Extract key fields from the JSON payload.
+    patient_info = parse_patient_data(fhir_data)
+    
+    # Step 3: For demonstration, print the extracted data.
+    print("Extracted FHIR Patient Data:")
+    for key, value in patient_info.items():
+        print(f"{key}: {value}")
+
+if __name__ == "__main__":
+    main()
